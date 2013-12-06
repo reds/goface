@@ -3,17 +3,27 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 )
 
+type Rect struct {
+	X      int
+	Y      int
+	Width  int
+	Height int
+}
+
 type Resp struct {
 	Num         int    `json:"num"`
 	Url         string `json:"url"`
 	ErrorNum    int    `json:"errorNum"`
-	ErrorString string `json:"errorString"`
+	ErrorString string `json:"errorString,omitempty"`
+	NumFaces    int
+	Faces       []Rect
 }
 
 func doOneUrl(n int, url string) *Resp {
@@ -31,8 +41,7 @@ func doOneUrl(n int, url string) *Resp {
 		ret.ErrorString = err.Error()
 		return ret
 	}
-	faceDetect(resp.Header.Get("content-type"), body)
-	return ret
+	return faceDetect(resp.Header.Get("content-type"), body)
 }
 
 func getUrlList(r *http.Request) []string {
@@ -82,7 +91,13 @@ func handleUrls(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf)
 }
 
+var (
+	imageRoot = flag.String("i", "/tmp/facedetect/images", "Root directory for processed images")
+	haarFile  = flag.String("h", "haarcascade_frontalface_default.xml", "File containing the trained haar parameters used by OpenCV")
+)
+
 func main() {
+	flag.Parse()
 	http.HandleFunc("/1/api/facedetect/url", handleUrls) // process a list of urls
-	http.ListenAndServe(":8080", nil)
+	panic(http.ListenAndServe(":8088", nil))
 }
