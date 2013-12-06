@@ -7,9 +7,12 @@
 #include <opencv/highgui.h>  // loadimage
 
 CvHaarClassifierCascade *default_frontalface_cascade;
+CvMemStorage* tmp;
 
 static int init( char* ffc ) {
   default_frontalface_cascade = cvLoad ( ffc, 0, 0, 0 );
+  tmp = cvCreateMemStorage ( 0 );
+
   return 1;
 }
 
@@ -20,7 +23,6 @@ static char* process_image ( char* fn ) {
     printf ( "img NULL\n" );
     return "";
   }
-  CvMemStorage* tmp = cvCreateMemStorage ( 0 );
   CvSeq* faces = cvHaarDetectObjects ( img,
 				       default_frontalface_cascade,
 				       tmp,
@@ -28,8 +30,6 @@ static char* process_image ( char* fn ) {
 				       3,
 				       CV_HAAR_DO_CANNY_PRUNING,
 				       cvSize ( 0, 0 ) );
-  cvReleaseImage ( &img );
-
   char* f = malloc(1);
   f[0] = '\0';
   int i;
@@ -40,8 +40,20 @@ static char* process_image ( char* fn ) {
     f = realloc ( f, strlen(f) + n + 1 );
     strcat ( f, ff );
   }
-  cvReleaseMemStorage ( &tmp );
-  // free rects and cvseq
-  printf ( "%d faces: %s\n", faces->total, f );
+  cvReleaseImage ( &img );
   return f;
 }
+
+#ifdef TEST
+
+int main (int argc, char* argv[] ) {
+  init("haarcascade_frontalface_default.xml");
+  int i;
+  for ( i = 1; i < argc; i++ ) {
+    printf ( "%d %s\n", i, argv[i] );
+    process_image ( argv[i] );
+  }
+}
+
+#endif
+

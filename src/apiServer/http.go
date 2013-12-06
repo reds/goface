@@ -7,23 +7,45 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"runtime"
 	"strings"
+	"time"
 )
 
 type Rect struct {
-	X      int
-	Y      int
-	Width  int
-	Height int
+	X int `json:"x"`
+	Y int `json:"y"`
+	W int `json:"w"`
+	H int `json:"h"`
 }
 
 type Resp struct {
-	Num         int    `json:"num"`
-	Url         string `json:"url"`
-	ErrorNum    int    `json:"errorNum"`
-	ErrorString string `json:"errorString,omitempty"`
-	NumFaces    int
-	Faces       []Rect
+	Num         int           `json:"num"`
+	Url         string        `json:"url"`
+	ErrorNum    int           `json:"errorNum"`
+	ErrorString string        `json:"errorString,omitempty"`
+	NumFaces    int           `json:"numFaces,omitempty"`
+	Faces       []Rect        `json:"faces,omitempty"`
+	Time        time.Duration `json:"time,omitempty"`
+	ContentType string        `json:"contentType,omitempty"`
+	Cpuid       int
+	data        []byte
+	resp        chan *Resp
+}
+
+var fdChan = make(chan *Resp)
+
+func doOneUrlLoop(id int) {
+	for ret := range fdChan {
+		ret.Cpuid = id
+		ret.ErrorNum = 0
+		ret.ErrorString = ""
+		t1 := time.Now()
+		ret.Faces = faceDetect(ret.ContentType, ret.data)
+		ret.NumFaces = len(ret.Faces)
+		ret.Time = time.Since(t1)
+		ret.resp <- ret
+	}
 }
 
 func doOneUrl(n int, url string) *Resp {
@@ -41,7 +63,9 @@ func doOneUrl(n int, url string) *Resp {
 		ret.ErrorString = err.Error()
 		return ret
 	}
-	return faceDetect(resp.Header.Get("content-type"), body)
+	respChan := make(chan *Resp)
+	fdChan <- &Resp{Num: n, Url: url, ContentType: resp.Header.Get("content-type"), data: body, resp: respChan}
+	return <-respChan
 }
 
 func getUrlList(r *http.Request) []string {
@@ -98,6 +122,10 @@ var (
 
 func main() {
 	flag.Parse()
+	log.Println(runtime.GOMAXPROCS(10), runtime.GOMAXPROCS(-1))
+	for i := 0; i < 10; i++ {
+		go doOneUrlLoop(i)
+	}
 	http.HandleFunc("/1/api/facedetect/url", handleUrls) // process a list of urls
 	panic(http.ListenAndServe(":8088", nil))
 }
