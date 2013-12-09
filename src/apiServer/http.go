@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -37,11 +36,18 @@ var fdChan = make(chan *Resp)
 
 func doOneUrlLoop(id int) {
 	for ret := range fdChan {
+		typ := "jpg" // should look at ret.ContentType
+		path, err := saveFile(typ, ret.data)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		ret.Url = "/static/images" + path[len(*imageRoot):] + "/orig." + typ
 		ret.Cpuid = id
 		ret.ErrorNum = 0
 		ret.ErrorString = ""
 		t1 := time.Now()
-		ret.Faces = faceDetect(ret.ContentType, ret.data)
+		ret.Faces = faceDetect(path + "/orig." + typ)
 		ret.NumFaces = len(ret.Faces)
 		ret.Time = time.Since(t1)
 		ret.resp <- ret
@@ -86,7 +92,6 @@ func getUrlList(r *http.Request) []string {
 	if err != nil {
 		log.Println(err)
 	}
-	log.Println(string(body))
 	if err == nil {
 		b := bytes.NewBuffer(body)
 		for {
@@ -94,7 +99,6 @@ func getUrlList(r *http.Request) []string {
 			if err != nil {
 				break
 			}
-			log.Println(line)
 			line = strings.TrimSpace(line)
 			a = append(a, line)
 		}
@@ -115,17 +119,21 @@ func handleUrls(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf)
 }
 
+func static(w http.ResponseWriter, r *http.Request) {
+	log.Println(r)
+}
+
 var (
-	imageRoot = flag.String("i", "/tmp/facedetect/images", "Root directory for processed images")
+	imageRoot = flag.String("i", "/tmp/facedetect/static/images", "Root directory for processed images")
 	haarFile  = flag.String("h", "haarcascade_frontalface_default.xml", "File containing the trained haar parameters used by OpenCV")
 )
 
 func main() {
 	flag.Parse()
-	log.Println(runtime.GOMAXPROCS(10), runtime.GOMAXPROCS(-1))
 	for i := 0; i < 10; i++ {
 		go doOneUrlLoop(i)
 	}
+	http.Handle("/static/", http.FileServer(http.Dir("/tmp/facedetect/")))
 	http.HandleFunc("/1/api/facedetect/url", handleUrls) // process a list of urls
 	panic(http.ListenAndServe(":8088", nil))
 }

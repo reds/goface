@@ -17,9 +17,8 @@ import (
 	"unsafe"
 )
 
-func faceDetect(typ string, body []byte) []Rect {
-	fn, _ := saveFile(typ, body)
-	faces := C.process_image(C.CString(fn + "/orig"))
+func faceDetect(fn string) []Rect {
+	faces := C.process_image(C.CString(fn))
 	list := C.GoString(faces)
 	C.free(unsafe.Pointer(faces))
 	var f []Rect
@@ -46,7 +45,7 @@ func saveFile(typ string, body []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ioutil.WriteFile(path+"/orig", body, 0600)
+	ioutil.WriteFile(path+"/orig."+typ, body, 0600)
 	return path, nil
 }
 
